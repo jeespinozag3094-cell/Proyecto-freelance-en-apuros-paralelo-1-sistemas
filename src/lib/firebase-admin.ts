@@ -19,4 +19,15 @@ if (!getApps().length && firebaseConfig.projectId) {
   });
 }
 
-export const adminAuth = getAuth();
+let _adminAuth: any = null;
+export const adminAuth = new Proxy({} as any, {
+  get(target, prop, receiver) {
+    if (!_adminAuth) {
+      if (!getApps().length) {
+        throw new Error("Firebase Admin is not initialized. Please configure Firebase.");
+      }
+      _adminAuth = getAuth();
+    }
+    return Reflect.get(_adminAuth, prop, receiver);
+  }
+});
