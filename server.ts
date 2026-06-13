@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const PORT = 3000;
 
   app.use(express.json());
 
@@ -264,10 +264,26 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    // Robustly check and locate the correct dist path
+    let distPath = path.join(process.cwd(), "dist");
+    if (!fs.existsSync(distPath)) {
+      distPath = path.join(__dirname, "../dist");
+    }
+    if (!fs.existsSync(distPath)) {
+      distPath = path.join(__dirname, "dist");
+    }
+    if (!fs.existsSync(distPath)) {
+      distPath = "/app/dist";
+    }
+    
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      const indexFile = path.join(distPath, "index.html");
+      if (fs.existsSync(indexFile)) {
+        res.sendFile(indexFile);
+      } else {
+        res.status(404).send("Application dist/index.html not found.");
+      }
     });
   }
 

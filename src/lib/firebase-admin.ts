@@ -5,12 +5,27 @@ import path from 'path';
 
 let firebaseConfig: any = {};
 try {
-  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-  if (fs.existsSync(configPath)) {
+  // Check multiple safe paths
+  const possiblePaths = [
+    path.join(process.cwd(), 'firebase-applet-config.json'),
+    path.join(__dirname, 'firebase-applet-config.json'),
+    path.join(__dirname, '../firebase-applet-config.json'),
+    path.join(__dirname, '../../firebase-applet-config.json'),
+  ];
+  
+  let configPath = '';
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      configPath = p;
+      break;
+    }
+  }
+
+  if (configPath) {
     firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   }
 } catch (error) {
-  console.warn('Failed to load firebase-applet-config.json safely via fs:', error);
+  console.warn('Failed to load firebase-applet-config.json safely:', error);
 }
 
 if (!getApps().length && firebaseConfig.projectId) {
