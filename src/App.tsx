@@ -75,51 +75,9 @@ export default function App() {
           setProjects(data.projects || []);
           setSessions(data.sessions || []);
         } else {
-          // Si no hay datos, cargar los clientes por defecto del prompt maestro
-          const defaultClients: Client[] = [
-            {
-              id: uuidv4(),
-              rut: '76.432.110-K',
-              name: 'TechAlpha',
-              email: 'techalpha@example.cl',
-              defaultTariff: 45000,
-              onboardingDate: new Date('2025-01-10').getTime(),
-              lastActiveDate: new Date('2025-01-10').getTime()
-            },
-            {
-              id: uuidv4(),
-              rut: '15.882.334-5',
-              name: 'Aura Ventures',
-              email: 'auraventures@example.cl',
-              defaultTariff: 35000,
-              onboardingDate: new Date('2025-11-20').getTime(),
-              lastActiveDate: new Date('2025-11-20').getTime()
-            }
-          ];
-          
-          setClients(defaultClients);
-          
-          const defaultProjects: Project[] = defaultClients.map(c => ({
-            id: uuidv4(),
-            clientId: c.id,
-            name: `Proyecto Base ${c.name}`,
-            status: 'ACTIVE'
-          }));
-          
-          setProjects(defaultProjects);
+          setClients([]);
+          setProjects([]);
           setSessions([]);
-
-          // Automatically sync defaults for personal account
-          if (userToken) {
-            fetch('/api/sync', {
-              method: 'POST',
-              headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${userToken}`
-              },
-              body: JSON.stringify({ clients: defaultClients, projects: defaultProjects, sessions: [] })
-            });
-          }
         }
       })
       .catch(err => {
@@ -144,14 +102,6 @@ export default function App() {
     } catch (error) {
       console.error("Error signing out:", error);
     }
-  };
-
-  const loadDefaultCSV = () => {
-    fetch('/datos_lucia.csv')
-      .then(res => res.text())
-      .then(csvText => {
-        processCSV(csvText);
-      });
   };
 
   const processCSV = (csvText: string) => {
