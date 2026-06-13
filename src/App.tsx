@@ -15,8 +15,14 @@ import {
 } from './lib/chileanUtils';
 import { cn } from './lib/utils';
 import { Client, Project, WorkSession, DashboardStats, DocumentType } from './types';
+import { auth, googleAuthProvider } from './lib/firebase';
+import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
 
 export default function App() {
+  // Auth State
+  const [user, setUser] = useState<User | null>(null);
+  const [userToken, setUserToken] = useState<string | null>(null);
+
   // State
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -40,15 +46,35 @@ export default function App() {
   
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initial Load
+  // Auth state change subscription
   useEffect(() => {
-    fetch('/api/data')
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        const token = await currentUser.getIdToken();
+        setUserToken(token);
+      } else {
+        setUserToken(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Initial Load & Auth Change Data Load
+  useEffect(() => {
+    const headers: Record<string, string> = {};
+    if (userToken) {
+      headers['Authorization'] = `Bearer ${userToken}`;
+    }
+
+    fetch('/api/data', { headers })
       .then(res => res.json())
       .then(data => {
-        if (data.clients.length > 0) setClients(data.clients);
-        if (data.projects.length > 0) setProjects(data.projects);
-        if (data.sessions.length > 0) setSessions(data.sessions);
-        else {
+        if (data.clients && data.clients.length > 0) {
+          setClients(data.clients);
+          setProjects(data.projects || []);
+          setSessions(data.sessions || []);
+        } else {
           // Si no hay datos, cargar los clientes por defecto del prompt maestro
           const defaultClients: Client[] = [
             {
@@ -81,9 +107,44 @@ export default function App() {
           }));
           
           setProjects(defaultProjects);
+          setSessions([]);
+
+          // Automatically sync defaults for personal account
+          if (userToken) {
+            fetch('/api/sync', {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`
+              },
+              body: JSON.stringify({ clients: defaultClients, projects: defaultProjects, sessions: [] })
+            });
+          }
         }
+      })
+      .catch(err => {
+        console.error("Failed to load initial data:", err);
       });
-  }, []);
+  }, [userToken]);
+
+  const loginWithGoogle = async () => {
+    try {
+      await signInWithPopup(auth, googleAuthProvider);
+    } catch (error) {
+      console.error("Error signing in with Google:", error);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await signOut(auth);
+      setClients([]);
+      setProjects([]);
+      setSessions([]);
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
 
   const loadDefaultCSV = () => {
     fetch('/datos_lucia.csv')
@@ -176,13 +237,17 @@ export default function App() {
   // Persist Data
   useEffect(() => {
     if (clients.length || projects.length || sessions.length) {
-      fetch('/api/data', {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (userToken) {
+        headers['Authorization'] = `Bearer ${userToken}`;
+      }
+      fetch('/api/sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ clients, projects, sessions })
       });
     }
-  }, [clients, projects, sessions]);
+  }, [clients, projects, sessions, userToken]);
 
   // Update Stats
   useEffect(() => {
@@ -339,6 +404,35 @@ export default function App() {
             <p className="text-xs text-black/50 font-medium">RETENCIÓN SII 2026</p>
             <p className="font-mono font-bold">15.25%</p>
           </div>
+
+          {user ? (
+            <div className="flex items-center gap-2 bg-[#F5F5F0] pr-3 pl-2 py-1 rounded-full border border-[#141414]/10">
+              {user.photoURL ? (
+                <img src={user.photoURL} alt={user.displayName || "User"} className="w-5 h-5 rounded-full" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="w-5 h-5 rounded-full bg-black text-white text-[10px] font-bold flex items-center justify-center">
+                  {(user.displayName || user.email || "U")[0].toUpperCase()}
+                </div>
+              )}
+              <span className="text-xs font-semibold text-[#141414] max-w-[100px] truncate">
+                {user.displayName || user.email}
+              </span>
+              <button 
+                onClick={logout} 
+                className="text-xs text-red-500 font-bold hover:text-red-700 transition-colors ml-1 cursor-pointer"
+              >
+                Salir
+              </button>
+            </div>
+          ) : (
+            <button 
+              onClick={loginWithGoogle}
+              className="flex items-center gap-2 bg-black text-white px-4 py-1.5 rounded-full text-xs font-semibold hover:bg-black/80 transition-colors cursor-pointer"
+            >
+              Sign In (Google)
+            </button>
+          )}
+
           <button className="flex items-center gap-2 bg-white border border-[#141414] px-4 py-2 rounded-full text-sm font-semibold hover:bg-black hover:text-white transition-colors cursor-pointer relative">
             <Upload size={16} />
             Cargar CSV
