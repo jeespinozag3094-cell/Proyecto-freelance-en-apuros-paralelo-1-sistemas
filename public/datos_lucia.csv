@@ -1,0 +1,7 @@
+rut_cliente,nombre_cliente,fecha_inicio,fecha_ultima_sesion,horas_acumuladas,tarifa_hora_clp,estado_pago,tipo_documento
+76.432.110-K,TechAlpha SpA,2025-01-10,2026-05-01,120,45000,Al día,Factura (IVA 19%)
+15.882.334-5,Aura Ventures,2025-11-20,2026-01-15,45,35000,Vencido (Ene),Boleta (Ret. 15.25%)
+99.550.200-1,Global Ventures,2025-12-01,2026-04-28,28,55000,Al día,Factura (IVA 19%)
+18.223.441-2,StartUp Labs,2026-02-15,2026-05-05,60,30000,Pendiente,Boleta (Ret. 15.25%)
+77.112.990-8,Stratos Group,2025-08-20,2026-05-04,15,42000,Al día,Factura (IVA 19%)
+12.443.556-7,Nexus Corp,2024-05-05,2026-02-10,72,60000,Crítico (>90 días),Factura (IVA 19%)

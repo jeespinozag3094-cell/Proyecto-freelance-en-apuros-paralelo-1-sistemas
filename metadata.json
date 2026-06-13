@@ -1,0 +1,6 @@
+{
+  "name": "Freelance en Apuros",
+  "description": "Gestión administrativa y financiera para freelancers en Chile. Boletas de Honorarios, Facturas IVA, Tracker de horas en CLP y dashboard de salud financiera.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["freelance-management", "tax-compliance-cl", "timer-widget"]
+}
