@@ -1,7 +1,6 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import { fileURLToPath } from "url";
 import fs from "fs";
 import { db } from "./src/db/index.ts";
 import { clients, projects, sessions, users } from "./src/db/schema.ts";
@@ -9,12 +8,16 @@ import { eq, inArray, and } from "drizzle-orm";
 import { adminAuth } from "./src/lib/firebase-admin.ts";
 import { getOrCreateUser } from "./src/db/users.ts";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+let currentDirname = process.cwd();
+try {
+  if (typeof __dirname !== "undefined") {
+    currentDirname = __dirname;
+  }
+} catch (e) {}
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   app.use(express.json());
 
@@ -267,10 +270,10 @@ async function startServer() {
     // Robustly check and locate the correct dist path
     let distPath = path.join(process.cwd(), "dist");
     if (!fs.existsSync(distPath)) {
-      distPath = path.join(__dirname, "../dist");
+      distPath = path.join(currentDirname, "../dist");
     }
     if (!fs.existsSync(distPath)) {
-      distPath = path.join(__dirname, "dist");
+      distPath = path.join(currentDirname, "dist");
     }
     if (!fs.existsSync(distPath)) {
       distPath = "/app/dist";

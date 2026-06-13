@@ -5,23 +5,8 @@ import path from 'path';
 
 let firebaseConfig: any = {};
 try {
-  // Check multiple safe paths
-  const possiblePaths = [
-    path.join(process.cwd(), 'firebase-applet-config.json'),
-    path.join(__dirname, 'firebase-applet-config.json'),
-    path.join(__dirname, '../firebase-applet-config.json'),
-    path.join(__dirname, '../../firebase-applet-config.json'),
-  ];
-  
-  let configPath = '';
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      configPath = p;
-      break;
-    }
-  }
-
-  if (configPath) {
+  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(configPath)) {
     firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   }
 } catch (error) {
