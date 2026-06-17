@@ -29,6 +29,10 @@ export const projects = pgTable('projects', {
   name: text('name').notNull(),
   description: text('description'),
   status: text('status').$type<'ACTIVE' | 'ARCHIVED'>().notNull().default('ACTIVE'),
+  price: integer('price').default(0).notNull(),
+  deadline: text('deadline'),
+  paymentStatus: text('payment_status').$type<'PENDING' | 'PAID'>().notNull().default('PENDING'),
+  paidAt: bigint('paid_at', { mode: 'number' }),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

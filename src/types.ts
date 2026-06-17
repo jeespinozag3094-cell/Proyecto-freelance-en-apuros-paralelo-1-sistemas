@@ -18,6 +18,10 @@ export interface Project {
   name: string;
   description?: string;
   status: 'ACTIVE' | 'ARCHIVED';
+  price: number;
+  deadline?: string;
+  paymentStatus: 'PENDING' | 'PAID';
+  paidAt?: number;
 }
 
 export interface WorkSession {

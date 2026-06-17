@@ -214,13 +214,21 @@ async function startServer() {
             clientId: p.clientId,
             name: p.name,
             description: p.description || null,
-            status: p.status || 'ACTIVE'
+            status: p.status || 'ACTIVE',
+            price: typeof p.price === 'number' ? p.price : (parseInt(p.price) || 0),
+            deadline: p.deadline || null,
+            paymentStatus: p.paymentStatus || 'PENDING',
+            paidAt: p.paidAt || null
           }).onConflictDoUpdate({
             target: projects.id,
             set: {
               name: p.name,
               description: p.description || null,
-              status: p.status || 'ACTIVE'
+              status: p.status || 'ACTIVE',
+              price: typeof p.price === 'number' ? p.price : (parseInt(p.price) || 0),
+              deadline: p.deadline || null,
+              paymentStatus: p.paymentStatus || 'PENDING',
+              paidAt: p.paidAt || null
             }
           });
         }
