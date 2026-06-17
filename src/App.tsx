@@ -3,7 +3,7 @@ import {
   Play, Pause, StopCircle, Upload, Download, 
   TrendingUp, TrendingDown, Clock, FileText, 
   Users, AlertCircle, CheckCircle2, History,
-  DollarSign, Calculator, Calendar, Search
+  DollarSign, Calculator, Calendar, Search, Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Papa from 'papaparse';
@@ -488,6 +488,94 @@ export default function App() {
     };
   }, [isTimerRunning, timerStart]);
 
+  const handleResetData = async () => {
+    if (!window.confirm("¿Estás seguro de que deseas restablecer la aplicación y eliminar TODOS tus clientes, proyectos y registros? Esta acción no se puede deshacer y borrará permanentemente toda la base de datos de tu usuario.")) {
+      return;
+    }
+
+    try {
+      const headers: Record<string, string> = {};
+      if (userToken) {
+        headers['Authorization'] = `Bearer ${userToken}`;
+      }
+
+      const res = await fetch('/api/reset', {
+        method: 'POST',
+        headers
+      });
+
+      if (res.ok) {
+        // Clear state locally
+        setClients([]);
+        setProjects([]);
+        setSessions([]);
+        setActiveProject(null);
+        safeLocalStorage.removeItem('active_project_id');
+        safeLocalStorage.removeItem('timer_running');
+        safeLocalStorage.removeItem('timer_start');
+        safeLocalStorage.removeItem('timer_elapsed');
+        setIsTimerRunning(false);
+        setTimerStart(null);
+        setElapsedSeconds(0);
+        
+        alert("Todos los datos han sido restablecidos y eliminados con éxito.");
+      } else {
+        const errData = await res.json();
+        alert(`Error al restablecer los datos: ${errData.error || 'Desconocido'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Hubo un problema al conectar con el servidor para restablecer los datos.");
+    }
+  };
+
+  const handleDeleteClient = async (clientId: string, clientName: string) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar al cliente "${clientName}"? Se borrarán permanentemente todos sus proyectos y horas asociadas.`)) {
+      return;
+    }
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (userToken) {
+        headers['Authorization'] = `Bearer ${userToken}`;
+      }
+
+      const res = await fetch(`/api/clients/${clientId}`, {
+        method: 'DELETE',
+        headers
+      });
+
+      if (res.ok) {
+        setClients(prev => prev.filter(c => c.id !== clientId));
+        const associatedProjects = projects.filter(p => p.clientId === clientId);
+        const associatedProjIds = associatedProjects.map(p => p.id);
+        setProjects(prev => prev.filter(p => p.clientId !== clientId));
+        setSessions(prev => prev.filter(s => !associatedProjIds.includes(s.projectId)));
+        
+        if (activeProject && activeProject.clientId === clientId) {
+          const remainingProjects = projects.filter(p => p.clientId !== clientId);
+          if (remainingProjects.length > 0) {
+            setActiveProject(remainingProjects[0]);
+            safeLocalStorage.setItem('active_project_id', remainingProjects[0].id);
+          } else {
+            setActiveProject(null);
+            safeLocalStorage.removeItem('active_project_id');
+          }
+        }
+
+        alert(`El cliente "${clientName}" ha sido eliminado con éxito.`);
+      } else {
+        const errData = await res.json();
+        alert(`Error al eliminar el cliente: ${errData.error || 'Desconocido'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Hubo un problema al conectar con el servidor para eliminar al cliente.");
+    }
+  };
+
   // CSV Handling
   const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -571,6 +659,15 @@ export default function App() {
             <Upload size={16} />
             Cargar CSV
             <input type="file" accept=".csv" onChange={handleCSVUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+          </button>
+
+          <button 
+            onClick={handleResetData}
+            className="flex items-center gap-2 bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-full text-sm font-semibold hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors cursor-pointer"
+            title="Borrar todos los clientes, proyectos y registros"
+          >
+            <Trash2 size={16} />
+            Restablecer Datos
           </button>
         </div>
       </nav>
@@ -699,6 +796,7 @@ export default function App() {
                     <th className="px-6 py-3">Inicio Contrato</th>
                     <th className="px-6 py-3">Última Actividad</th>
                     <th className="px-6 py-3">Estado Focal</th>
+                    <th className="px-6 py-3 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-[#141414]/5">
@@ -789,12 +887,24 @@ export default function App() {
                             </span>
                           </div>
                         </td>
+                        <td className="px-6 py-4 text-right">
+                          <button 
+                            onClick={() => handleDeleteClient(c.id, c.name)}
+                            className="p-1 px-2.5 rounded-md text-red-600 hover:bg-red-50 hover:text-red-800 transition-colors cursor-pointer text-xs font-semibold inline-flex items-center gap-1"
+                            title={`Eliminar cliente ${c.name}`}
+                          >
+                            <Trash2 size={13} />
+                            <span>Eliminar</span>
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
                   {clients.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-black/40 italic">No se encontraron clientes con ese nombre.</td>
+                      <td colSpan={6} className="px-6 py-8 text-center text-black/40 italic">
+                        {clients.length === 0 ? "No hay clientes registrados todavía." : "No se encontraron clientes con ese nombre."}
+                      </td>
                     </tr>
                   )}
                 </tbody>

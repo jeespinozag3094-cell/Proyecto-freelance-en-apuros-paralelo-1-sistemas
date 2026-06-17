@@ -267,6 +267,71 @@ async function startServer() {
     }
   });
 
+  // 5. POST /api/reset : Reset all user data (delete clients, projects, and sessions)
+  app.post("/api/reset", async (req, res) => {
+    try {
+      const user = await getUserContext(req);
+      
+      // Fetch user's clients
+      const dbClients = await db.select().from(clients).where(eq(clients.userId, user.id));
+      const clientIds = dbClients.map(c => c.id);
+      
+      if (clientIds.length > 0) {
+        // Fetch user's projects
+        const dbProjects = await db.select().from(projects).where(inArray(projects.clientId, clientIds));
+        const projectIds = dbProjects.map(p => p.id);
+        
+        if (projectIds.length > 0) {
+          // Delete sessions
+          await db.delete(sessions).where(inArray(sessions.projectId, projectIds));
+          // Delete projects
+          await db.delete(projects).where(inArray(projects.clientId, clientIds));
+        }
+        
+        // Delete clients
+        await db.delete(clients).where(eq(clients.userId, user.id));
+      }
+      
+      res.json({ success: true, message: "Todas los datos han sido restablecidos correctamente." });
+    } catch (error: any) {
+      console.error("Database reset failed:", error);
+      res.status(500).json({ error: "Failed to reset data on Cloud SQL", details: error.message });
+    }
+  });
+
+  // 6. DELETE /api/clients/:id : Deletes a single client and their projects/sessions
+  app.delete("/api/clients/:id", async (req, res) => {
+    try {
+      const user = await getUserContext(req);
+      const clientId = req.params.id;
+
+      // Verify client belongs to this user
+      const [dbClient] = await db.select().from(clients).where(and(eq(clients.id, clientId), eq(clients.userId, user.id)));
+      if (!dbClient) {
+        return res.status(404).json({ error: "Cliente no encontrado o no autorizado." });
+      }
+
+      // Fetch projects of this client
+      const dbProjects = await db.select().from(projects).where(eq(projects.clientId, clientId));
+      const projectIds = dbProjects.map(p => p.id);
+
+      if (projectIds.length > 0) {
+        // Delete sessions
+        await db.delete(sessions).where(inArray(sessions.projectId, projectIds));
+        // Delete projects
+        await db.delete(projects).where(eq(projects.clientId, clientId));
+      }
+
+      // Delete the client
+      await db.delete(clients).where(eq(clients.id, clientId));
+
+      res.json({ success: true, message: `Cliente "${dbClient.name}" y sus datos asociados han sido eliminados correctamente.` });
+    } catch (error: any) {
+      console.error("Database client delete failed:", error);
+      res.status(500).json({ error: "Failed to delete client from Cloud SQL", details: error.message });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
