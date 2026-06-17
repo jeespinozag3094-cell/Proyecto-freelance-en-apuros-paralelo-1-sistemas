@@ -170,8 +170,9 @@ export default function App() {
         const newSessions: WorkSession[] = [];
 
         data.forEach(row => {
-          // Normalizar nombres de columnas
-          const rut = row.rut_cliente || row.rut;
+          // Normalizar nombres de columnas y formatear RUT
+          const rawRut = row.rut_cliente || row.rut || '';
+          const rut = formatRUT(rawRut);
           const nombre = row.nombre_cliente || row.nombre;
           const tarifa = parseInt(row.tarifa_hora_clp || row.tarifa_clp || '30000');
           const inicio = row.fecha_inicio || row.fecha_inicio_proyecto;
@@ -1389,7 +1390,7 @@ function NewClientForm({ clients, onAdd }: { clients: Client[], onAdd: (c: Clien
                 <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">RUT Cliente</label>
                 <input 
                   type="text" 
-                  placeholder="12.345.678-9"
+                  placeholder="12.345.678-9 o 76.123.456-K"
                   className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all text-black"
                   value={rut}
                   onChange={(e) => setRut(formatRUT(e.target.value))}
