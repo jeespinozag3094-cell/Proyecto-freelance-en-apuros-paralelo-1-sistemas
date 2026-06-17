@@ -844,6 +844,7 @@ function StatusBadge({ status }: { status: 'PENDING' | 'ISSUED' | 'PAID' | 'OVER
 function NewClientForm({ onAdd }: { onAdd: (c: Client, p: Project) => void }) {
   const [rut, setRut] = useState('');
   const [name, setName] = useState('');
+  const [projectName, setProjectName] = useState('');
   const [tariff, setTariff] = useState('35000');
   const [onboardingDate, setOnboardingDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
@@ -865,13 +866,14 @@ function NewClientForm({ onAdd }: { onAdd: (c: Client, p: Project) => void }) {
     const newProject: Project = {
       id: uuidv4(),
       clientId,
-      name: `Consultoría ${name}`,
+      name: projectName || `Consultoría ${name}`,
       status: 'ACTIVE'
     };
 
     onAdd(newClient, newProject);
     setRut('');
     setName('');
+    setProjectName('');
   };
 
   return (
@@ -907,6 +909,17 @@ function NewClientForm({ onAdd }: { onAdd: (c: Client, p: Project) => void }) {
           className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          required
+        />
+      </div>
+      <div>
+        <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">Nombre del Proyecto</label>
+        <input 
+          type="text" 
+          placeholder="Ej: Identidad Corporativa o Rediseño Web"
+          className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all"
+          value={projectName}
+          onChange={(e) => setProjectName(e.target.value)}
           required
         />
       </div>
