@@ -146,13 +146,15 @@ export default function App() {
             });
           }
 
-          let projectId = projects.find(p => p.clientId === clientId)?.id || newProjects.find(p => p.clientId === clientId)?.id;
+          const targetProjectName = row.proyecto_activo || ("Proyecto " + (nombre || 'Base'));
+          let projectId = projects.find(p => p.clientId === clientId && p.name === targetProjectName)?.id || 
+                          newProjects.find(p => p.clientId === clientId && p.name === targetProjectName)?.id;
           if (!projectId) {
             projectId = uuidv4();
             newProjects.push({
               id: projectId,
               clientId: clientId || '',
-              name: row.proyecto_activo || ("Proyecto " + (nombre || 'Base')),
+              name: targetProjectName,
               status: 'ACTIVE',
               price: parseInt(row.presupuesto_proyecto || row.precio_proyecto || '0') || 0,
               paymentStatus: 'PENDING'
@@ -638,7 +640,7 @@ export default function App() {
                       : null;
                     const isFuga = daysSinceLastActive !== null && daysSinceLastActive > 30;
                     
-                    const project = projects.find(p => p.clientId === c.id);
+                    const clientProjects = projects.filter(p => p.clientId === c.id);
                     const abcInfo = stats.abcData.find(item => item.clientId === c.id);
                     const category = abcInfo?.category || 'B';
                     
@@ -652,25 +654,33 @@ export default function App() {
                     return (
                       <tr 
                         key={c.id} 
-                        className="hover:bg-[#F9F9F7] transition-colors cursor-pointer"
-                        title="Haga clic para modificar la fecha límite de entrega del proyecto"
-                        onClick={() => {
-                          if (project) {
-                            setSelectedProjectForDeadline(project);
-                            setTempDeadline(project.deadline || '');
-                          } else {
-                            alert('Este cliente no tiene un proyecto activo para configurar fecha límite.');
-                          }
-                        }}
+                        className="hover:bg-[#F9F9F7] transition-colors"
                       >
                         <td className="px-6 py-4 font-mono text-xs text-black/50">{c.rut}</td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
                             <span className={cn("font-bold text-sm", activeColorClass)}>{c.name}</span>
-                            {project && (
-                              <span className={cn("text-xs font-semibold mt-0.5 opacity-80", activeColorClass)}>
-                                Proy: {project.name}
-                              </span>
+                            {clientProjects.length > 0 ? (
+                              <div className="mt-1.5 flex flex-col gap-1">
+                                {clientProjects.map((p) => (
+                                  <div 
+                                    key={p.id} 
+                                    className="group flex items-center gap-1.5 cursor-pointer max-w-fit"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedProjectForDeadline(p);
+                                      setTempDeadline(p.deadline || '');
+                                    }}
+                                    title="Haga clic para cambiar fecha límite"
+                                  >
+                                    <span className={cn("text-xs font-semibold py-0.5 px-2 rounded-md bg-black/5 hover:bg-black/10 group-hover:bg-black/15 transition-all text-left", activeColorClass)}>
+                                      📂 {p.name} {p.deadline ? `(Límite: ${format(new Date(p.deadline), 'dd/MM/yyyy')})` : '(Sin fecha límite)'}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-black/30 italic">Sin proyectos</span>
                             )}
                           </div>
                         </td>
@@ -983,13 +993,18 @@ export default function App() {
           {/* Quick Client Add */}
           <div className="bg-white rounded-2xl p-6 border border-[#141414]/10 shadow-sm">
             <h3 className="font-bold flex items-center gap-2 mb-4">
-              <Users size={18} className="text-black/50" /> Nuevo Cliente
+              <Users size={18} className="text-black/50" /> Nuevo Cliente / Proyecto
             </h3>
-            <NewClientForm onAdd={(client, project) => {
-              setClients([...clients, client]);
-              setProjects([...projects, project]);
-              setActiveProject(project);
-            }} />
+            <NewClientForm 
+              clients={clients}
+              onAdd={(client, project) => {
+                if (client) {
+                  setClients(prev => [...prev, client]);
+                }
+                setProjects(prev => [...prev, project]);
+                setActiveProject(project);
+              }} 
+            />
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
@@ -1209,7 +1224,9 @@ function StatusBadge({ status }: { status: 'PENDING' | 'ISSUED' | 'PAID' | 'OVER
   );
 }
 
-function NewClientForm({ onAdd }: { onAdd: (c: Client, p: Project) => void }) {
+function NewClientForm({ clients, onAdd }: { clients: Client[], onAdd: (c: Client | null, p: Project) => void }) {
+  const [mode, setMode] = useState<'NEW' | 'EXISTING'>('NEW');
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [rut, setRut] = useState('');
   const [name, setName] = useState('');
   const [projectName, setProjectName] = useState('');
@@ -1219,30 +1236,47 @@ function NewClientForm({ onAdd }: { onAdd: (c: Client, p: Project) => void }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateRUT(rut)) return alert('RUT Chileno no válido (incluye DV)');
     
-    const clientId = uuidv4();
-    const newClient: Client = {
-      id: clientId,
-      rut,
-      name,
-      email: `${name.toLowerCase().replace(/ /g, '')}@example.cl`,
-      defaultTariff: 0, // no longer hourly based rate, defaults to 0
-      onboardingDate: new Date(onboardingDate).getTime(),
-      lastActiveDate: new Date(onboardingDate).getTime()
-    };
+    let clientId = '';
+    let clientToPass: Client | null = null;
+    
+    if (mode === 'NEW') {
+      if (!validateRUT(rut)) return alert('RUT Chileno no válido (incluye DV)');
+      clientId = uuidv4();
+      clientToPass = {
+        id: clientId,
+        rut,
+        name,
+        email: `${name.toLowerCase().replace(/ /g, '')}@example.cl`,
+        defaultTariff: 0,
+        onboardingDate: new Date(onboardingDate).getTime(),
+        lastActiveDate: new Date(onboardingDate).getTime()
+      };
+    } else {
+      if (!selectedClientId) {
+        if (clients.length > 0) {
+          clientId = clients[0].id;
+        } else {
+          return alert('Por favor, registra un cliente primero.');
+        }
+      } else {
+        clientId = selectedClientId;
+      }
+    }
 
     const newProject: Project = {
       id: uuidv4(),
       clientId,
-      name: projectName || `Consultoría ${name}`,
+      name: projectName || `Consultoría ${mode === 'NEW' ? name : (clients.find(c => c.id === clientId)?.name || 'Cliente')}`,
       status: 'ACTIVE',
       price: parseInt(projectPrice) || 0,
       deadline: deadline || undefined,
       paymentStatus: 'PENDING'
     };
 
-    onAdd(newClient, newProject);
+    onAdd(clientToPass, newProject);
+    
+    // Reset fields
     setRut('');
     setName('');
     setProjectName('');
@@ -1251,80 +1285,146 @@ function NewClientForm({ onAdd }: { onAdd: (c: Client, p: Project) => void }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+    <div className="space-y-4">
+      <div className="flex bg-[#F9F9F7] p-1 rounded-xl border border-[#141414]/5">
+        <button 
+          type="button"
+          onClick={() => setMode('NEW')}
+          className={cn(
+            "flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer",
+            mode === 'NEW' ? "bg-black text-white shadow-sm" : "text-[#141414]/60 hover:text-black"
+          )}
+        >
+          NUEVO CLIENTE
+        </button>
+        <button 
+          type="button"
+          onClick={() => {
+            setMode('EXISTING');
+            if (clients.length > 0 && !selectedClientId) {
+              setSelectedClientId(clients[0].id);
+            }
+          }}
+          className={cn(
+            "flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer",
+            mode === 'EXISTING' ? "bg-black text-white shadow-sm" : "text-[#141414]/60 hover:text-black"
+          )}
+        >
+          OTRO PROYECTO CLIENTE
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {mode === 'NEW' ? (
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">RUT Cliente</label>
+                <input 
+                  type="text" 
+                  placeholder="12.345.678-9"
+                  className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all text-black"
+                  value={rut}
+                  onChange={(e) => setRut(formatRUT(e.target.value))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">Precio Proyecto (CLP)</label>
+                <input 
+                  type="number" 
+                  className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all text-black"
+                  value={projectPrice}
+                  onChange={(e) => setProjectPrice(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">Nombre Cliente / Razón Social</label>
+              <input 
+                type="text" 
+                placeholder="Ej: Tech Chile SpA"
+                className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all text-black"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">Seleccionar Cliente Existente</label>
+              <select
+                className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all text-black"
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+                required
+              >
+                {clients.map(c => (
+                  <option key={c.id} value={c.id} className="text-black">
+                    {c.name} ({c.rut})
+                  </option>
+                ))}
+                {clients.length === 0 && (
+                  <option value="" className="text-black">No hay clientes registrados aún</option>
+                )}
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">Precio Proyecto (CLP)</label>
+              <input 
+                type="number" 
+                className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all text-black"
+                value={projectPrice}
+                onChange={(e) => setProjectPrice(e.target.value)}
+                required
+              />
+            </div>
+          </div>
+        )}
+
         <div>
-          <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">RUT Cliente</label>
+          <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">Nombre del Proyecto</label>
           <input 
             type="text" 
-            placeholder="12.345.678-9"
-            className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all"
-            value={rut}
-            onChange={(e) => setRut(formatRUT(e.target.value))}
+            placeholder="Ej: Identidad Corporativa o Rediseño Web"
+            className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all text-black"
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
             required
           />
         </div>
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">Precio Proyecto (CLP)</label>
-          <input 
-            type="number" 
-            className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all"
-            value={projectPrice}
-            onChange={(e) => setProjectPrice(e.target.value)}
-            required
-          />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">Inicio Proyecto</label>
+            <input 
+              type="date" 
+              className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all text-black"
+              value={onboardingDate}
+              onChange={(e) => setOnboardingDate(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">Fecha Límite Entrega</label>
+            <input 
+              type="date" 
+              className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all text-black"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+            />
+          </div>
         </div>
-      </div>
-      <div>
-        <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">Nombre Cliente / Razón Social</label>
-        <input 
-          type="text" 
-          placeholder="Ej: Tech Chile SpA"
-          className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-      </div>
-      <div>
-        <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">Nombre del Proyecto</label>
-        <input 
-          type="text" 
-          placeholder="Ej: Identidad Corporativa o Rediseño Web"
-          className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all"
-          value={projectName}
-          onChange={(e) => setProjectName(e.target.value)}
-          required
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">Inicio Proyecto</label>
-          <input 
-            type="date" 
-            className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all"
-            value={onboardingDate}
-            onChange={(e) => setOnboardingDate(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-black/40 font-bold mb-1 block">Fecha Límite Entrega</label>
-          <input 
-            type="date" 
-            className="w-full bg-[#F9F9F7] border border-[#141414]/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black transition-all"
-            value={deadline}
-            onChange={(e) => setDeadline(e.target.value)}
-          />
-        </div>
-      </div>
-      <button 
-        type="submit"
-        className="w-full bg-black text-white py-3 rounded-xl font-bold text-sm tracking-tight hover:bg-black/90 transition-colors cursor-pointer"
-      >
-        REGISTRAR CLIENTE Y PROYECTO
-      </button>
-    </form>
+        <button 
+          type="submit"
+          className="w-full bg-black text-white py-3 rounded-xl font-bold text-sm tracking-tight hover:bg-black/90 transition-colors cursor-pointer"
+        >
+          {mode === 'NEW' ? 'REGISTRAR CLIENTE Y PROYECTO' : 'REGISTRAR NUEVO PROYECTO'}
+        </button>
+      </form>
+    </div>
   );
 }
 
