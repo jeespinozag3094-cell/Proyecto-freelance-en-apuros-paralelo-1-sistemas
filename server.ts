@@ -332,8 +332,16 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  // Detect production mode (support Render environment variables or presence of dist folder)
+  const distPathFallback = path.join(process.cwd(), "dist");
+  const hasDist = fs.existsSync(distPathFallback) || 
+                  fs.existsSync(path.join(currentDirname, "dist")) || 
+                  fs.existsSync(path.join(currentDirname, "../dist")) || 
+                  fs.existsSync("/app/dist");
+  const isProd = process.env.NODE_ENV === "production" || process.env.RENDER === "true" || hasDist;
+
+  // Vite middleware for development vs built production files
+  if (!isProd) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -341,7 +349,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     // Robustly check and locate the correct dist path
-    let distPath = path.join(process.cwd(), "dist");
+    let distPath = distPathFallback;
     if (!fs.existsSync(distPath)) {
       distPath = path.join(currentDirname, "../dist");
     }
