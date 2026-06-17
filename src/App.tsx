@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Papa from 'papaparse';
-import { format, differenceInSeconds } from 'date-fns';
+import { format } from 'date-fns';
 import { v4 as uuidv4 } from 'uuid';
 
 import { 
@@ -17,6 +17,26 @@ import { cn } from './lib/utils';
 import { Client, Project, WorkSession, DashboardStats, DocumentType } from './types';
 import { auth, googleAuthProvider } from './lib/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
+
+const safeLocalStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {}
+  },
+  removeItem: (key: string): void => {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {}
+  }
+};
 
 export default function App() {
   // Auth State
@@ -42,10 +62,24 @@ export default function App() {
     abcData: []
   });
 
-  // Timer State
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [timerStart, setTimerStart] = useState<number | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  // Timer State with storage/reload persistence
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(() => {
+    return safeLocalStorage.getItem('timer_running') === 'true';
+  });
+  const [timerStart, setTimerStart] = useState<number | null>(() => {
+    const saved = safeLocalStorage.getItem('timer_start');
+    return saved ? parseInt(saved, 10) : null;
+  });
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(() => {
+    const savedStart = safeLocalStorage.getItem('timer_start');
+    const isRunning = safeLocalStorage.getItem('timer_running') === 'true';
+    if (isRunning && savedStart) {
+      const startMs = parseInt(savedStart, 10);
+      return Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+    }
+    const savedElapsed = safeLocalStorage.getItem('timer_elapsed');
+    return savedElapsed ? parseInt(savedElapsed, 10) : 0;
+  });
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [activeDocumentType, setActiveDocumentType] = useState<DocumentType>('BOLETA');
   
@@ -81,12 +115,23 @@ export default function App() {
       .then(data => {
         if (data.clients && data.clients.length > 0) {
           setClients(data.clients);
-          setProjects(data.projects || []);
+          const loadedProjects = data.projects || [];
+          setProjects(loadedProjects);
           setSessions(data.sessions || []);
+          
+          // Restore active project from localStorage or auto-select first project
+          const savedProjId = safeLocalStorage.getItem('active_project_id');
+          const found = loadedProjects.find(p => p.id === savedProjId);
+          if (found) {
+            setActiveProject(found);
+          } else if (loadedProjects.length > 0) {
+            setActiveProject(loadedProjects[0]);
+          }
         } else {
           setClients([]);
           setProjects([]);
           setSessions([]);
+          setActiveProject(null);
         }
       })
       .catch(err => {
@@ -405,11 +450,33 @@ export default function App() {
     setElapsedSeconds(0);
   };
 
+  // Save timer states to localStorage
+  useEffect(() => {
+    safeLocalStorage.setItem('timer_running', isTimerRunning ? 'true' : 'false');
+    if (timerStart !== null) {
+      safeLocalStorage.setItem('timer_start', timerStart.toString());
+    } else {
+      safeLocalStorage.removeItem('timer_start');
+    }
+  }, [isTimerRunning, timerStart]);
+
+  useEffect(() => {
+    safeLocalStorage.setItem('timer_elapsed', elapsedSeconds.toString());
+  }, [elapsedSeconds]);
+
+  useEffect(() => {
+    if (activeProject) {
+      safeLocalStorage.setItem('active_project_id', activeProject.id);
+    } else {
+      safeLocalStorage.removeItem('active_project_id');
+    }
+  }, [activeProject]);
+
   useEffect(() => {
     if (isTimerRunning) {
       timerIntervalRef.current = setInterval(() => {
         if (timerStart) {
-          setElapsedSeconds(differenceInSeconds(Date.now(), timerStart));
+          setElapsedSeconds(Math.max(0, Math.floor((Date.now() - timerStart) / 1000)));
         }
       }, 1000);
     } else {
