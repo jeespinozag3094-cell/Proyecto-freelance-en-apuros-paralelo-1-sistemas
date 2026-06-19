@@ -2,11 +2,11 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
-import { db } from "./src/db/index.ts";
-import { clients, projects, sessions, users } from "./src/db/schema.ts";
+import { db } from "./db/index.ts";
+import { clients, projects, sessions, users } from "./db/schema.ts";
 import { eq, inArray, and } from "drizzle-orm";
-import { adminAuth } from "./src/lib/firebase-admin.ts";
-import { getOrCreateUser } from "./src/db/users.ts";
+import { adminAuth } from "./lib/firebase-admin.ts";
+import { getOrCreateUser } from "./db/users.ts";
 
 let currentDirname = process.cwd();
 try {
@@ -17,7 +17,7 @@ try {
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const PORT = 3000;
 
   app.use(express.json());
 
@@ -332,19 +332,38 @@ async function startServer() {
     }
   });
 
-  // Detect production mode (support Render environment variables or presence of dist folder)
+  // Detect production mode (support Render environment variables)
   const distPathFallback = path.join(process.cwd(), "dist");
-  const hasDist = fs.existsSync(distPathFallback) || 
-                  fs.existsSync(path.join(currentDirname, "dist")) || 
-                  fs.existsSync(path.join(currentDirname, "../dist")) || 
-                  fs.existsSync("/app/dist");
-  const isProd = process.env.NODE_ENV === "production" || process.env.RENDER === "true" || hasDist;
+  const isProd = process.env.NODE_ENV === "production" || process.env.RENDER === "true";
+
+  // Let's write a debug log to find out what is going on
+  try {
+    fs.writeFileSync(
+      path.join(process.cwd(), "server-debug.log"),
+      JSON.stringify({
+        NODE_ENV: process.env.NODE_ENV,
+        RENDER: process.env.RENDER,
+        hasDist: fs.existsSync(distPathFallback),
+        isProd,
+        cwd: process.cwd(),
+        dirname: currentDirname,
+        distFallbackExists: fs.existsSync(distPathFallback),
+        distRelativeExists: fs.existsSync(path.join(currentDirname, "dist")),
+        distParentExists: fs.existsSync(path.join(currentDirname, "../dist")),
+        distAppExists: fs.existsSync("/app/dist")
+      }, null, 2),
+      "utf8"
+    );
+  } catch (err: any) {
+    console.error("Failed to write debug log", err);
+  }
 
   // Vite middleware for development vs built production files
   if (!isProd) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
+      configFile: path.join(process.cwd(), "frontend/vite.config.ts"),
     });
     app.use(vite.middlewares);
   } else {

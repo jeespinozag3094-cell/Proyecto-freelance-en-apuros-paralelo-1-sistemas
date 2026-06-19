@@ -86,6 +86,10 @@ export default function App() {
   // Selected project for editing project deadline
   const [selectedProjectForDeadline, setSelectedProjectForDeadline] = useState<Project | null>(null);
   const [tempDeadline, setTempDeadline] = useState('');
+
+  // Payment marking transition state
+  const [payingProjectId, setPayingProjectId] = useState<string | null>(null);
+  const [payDateVal, setPayDateVal] = useState<string>('');
   
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -968,19 +972,57 @@ export default function App() {
                                   {p.paidAt ? format(p.paidAt, 'dd/MM/yyyy') : 'Sin fecha'}
                                 </span>
                               </div>
+                            ) : payingProjectId === p.id ? (
+                              <div className="flex items-center gap-1.5 bg-black/5 p-1 rounded-lg border border-[#141414]/10">
+                                <span className="text-[10px] font-medium text-black/60 pl-1">Fecha:</span>
+                                <input 
+                                  type="date"
+                                  value={payDateVal}
+                                  onChange={(e) => setPayDateVal(e.target.value)}
+                                  className="bg-white border border-[#141414]/10 rounded px-1.5 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-black w-[130px]"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const parts = payDateVal.split('-');
+                                    let paidTimestamp = Date.now();
+                                    if (parts.length === 3) {
+                                      const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
+                                      if (!isNaN(d.getTime())) {
+                                        paidTimestamp = d.getTime();
+                                      }
+                                    }
+                                    setProjects(prevProjects => prevProjects.map(proj => 
+                                      proj.id === p.id 
+                                        ? { ...proj, paymentStatus: 'PAID', paidAt: paidTimestamp } 
+                                        : proj
+                                    ));
+                                    setPayingProjectId(null);
+                                    setPayDateVal('');
+                                  }}
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-md text-xs font-bold transition-colors cursor-pointer"
+                                  title="Confirmar pago"
+                                >
+                                  Listo
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPayingProjectId(null);
+                                    setPayDateVal('');
+                                  }}
+                                  className="bg-black/10 hover:bg-black/20 text-black/70 px-2 py-1 rounded-md text-xs font-bold transition-colors cursor-pointer"
+                                  title="Cancelar"
+                                >
+                                  ✕
+                                </button>
+                              </div>
                             ) : (
                               <button 
                                 type="button"
                                 onClick={() => {
-                                  const paidDateStr = prompt('Ingrese fecha de pago (YYYY-MM-DD) o deje vacío para hoy:', format(new Date(), 'yyyy-MM-dd'));
-                                  if (paidDateStr === null) return; // Cancelled
-                                  const paidTimestamp = paidDateStr ? new Date(paidDateStr).getTime() : Date.now();
-                                  
-                                  setProjects(prevProjects => prevProjects.map(proj => 
-                                    proj.id === p.id 
-                                      ? { ...proj, paymentStatus: 'PAID', paidAt: paidTimestamp } 
-                                      : proj
-                                  ));
+                                  setPayingProjectId(p.id);
+                                  setPayDateVal(format(new Date(), 'yyyy-MM-dd'));
                                 }}
                                 className="bg-black hover:bg-black/85 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                               >

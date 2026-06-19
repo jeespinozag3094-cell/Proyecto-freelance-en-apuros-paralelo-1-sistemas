@@ -21,7 +21,7 @@ const credentials = dbUrl
     };
 
 export default defineConfig({
-  schema: "./src/db/schema.ts",
+  schema: "./backend/db/schema.ts",
   out: "./drizzle", // Output directory for migrations.
   dialect: "postgresql",
   schemaFilter: ["public"],
